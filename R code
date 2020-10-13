@@ -1,0 +1,115 @@
+# 那些年我們一起追的女孩之文字雲 
+
+library(jiebaR)
+library(wordcloud2)
+
+path = 'C:/Users/ITSection/Desktop/R/wordcloud2作業/'
+
+name = '那些年我們一起追的女孩'
+if (name == '那些年我們一起追的女孩') { file = paste0(path, "data/那些年我們一起追的女孩1.txt") }
+if (name == '那些年我們一起追的女孩') { file = paste0(path, "data/那些年我們一起追的女孩2.txt") }
+
+# 為方便處理各種不同 .txt 資料問題，以下五種讀 .txt 的方法，擇一即可。
+# 第一種讀 .txt 的方法
+lyrics = read.table(file, 
+                    encoding="UTF-8", 
+                    header=FALSE,
+                    sep="\n", 
+                    stringsAsFactors=FALSE)
+# \n：換行字元。
+# \t：Tab 字元。
+data = unlist(lyrics)
+# unlist 轉換為 vector.
+# 因為 segment(code, jiebar) : Argument 'code' must be an string
+# data 必需為 string，不能是 dataframe or list，但可以是 vector.
+
+
+# 接下來要開始中文 "分詞" 或 "斷詞" (結巴中文分詞)
+# 參考: https://blog.stranity.com.tw/2016/11/22/
+
+# 將 R 環境設定成中文 (若需要)
+# Sys.setlocale(category="LC_ALL", locale="cht")
+
+jiebaR_worker = jiebaR::worker()
+# 使用內建方法分詞。
+# 在 worker() 內可以設定各種不同的切分法模型與引用外部詞庫，
+# jiebaR 提供了 7 種分詞引擎。
+# 1. 混合模型 (MixSegment) - type="mix":
+#    是分詞引擎裏面分詞效果較好的類，結它合使用最大概率法和隱式馬爾科夫模型。
+# 2. 最大概率法 (MPSegment) - type="mp":
+#    負責根據Trie樹構建有向無環圖和進行動態規劃算法，是分詞算法的核心。
+# 3. 隱式馬爾科夫模型 - (HMMSegment) type="hmm":
+#    是根據基於人民日報等語料庫構建的 HMM 模型來進行分詞，
+#    主要算法思路是根據 (B, E, M, S) 四個狀態來代表每個字的隱藏狀態。 
+#    HMM 模型由 dict/hmm_model.utf8 提供。分詞算法即 viterbi 算法。
+# 4. 索引模型 (QuerySegment) - type="query":
+#    先使用混合模型進行切詞，再對於切出來的較長的詞，
+#    枚舉句子中所有可能成詞的情況，找出詞庫裏存在。
+# 5. 標記模型 (tag) - type="tag"。
+# 6. Simhash模型 (simhash) - type="keywords":
+#    對中文文檔計算出對應的 simhash 值。
+#    simhash 是谷歌用來進行文本去重的算法，現在廣泛應用在文本處理中。
+#    Simhash 引擎先進行分詞和關鍵詞提取，後計算 Simhash 值和海明距離。
+# 7. 關鍵詞模型 (keywods) - type="simhash":
+#    關鍵詞提取所使用逆向文檔頻率 (IDF) 文本語料庫可以切換成自定義語料庫的路徑，
+#    使用方法與分詞類似。
+# 一般情況下，使用默認引擎 (混合模型) 就足夠了。
+
+# worker 一些參數可參考
+# https://hk.saowen.com/a/4e17feb2164cf9a99971e7825903b4c317ad75346a764f9d945589c580ba8035
+
+jiebaR_worker = jiebaR::worker(stop_word="C:/Users/ITSection/Desktop/R/wordcloud2作業/data/stopwords.txt", user="stopwords.txt")
+# stopwords.txt 為停用詞典檔，mydict.txt 為自建詞典檔。
+
+
+title_segment = jiebaR::segment(data, jiebaR_worker)
+# 以上擇一做分詞。
+
+# 停用詞過濾函數：filter_segment(分詞後的向量, 過濾詞向量)
+filter = c('台電')
+title_segment = jiebaR::filter_segment(title_segment, filter)
+
+# 接下來用 table() 做次數分配表，
+title_table = table(title_segment)
+title_table = data.frame(title_table)
+# 轉換為 dataframe 格式，方便之後依頻率做排序。
+title_table
+
+# 排序
+title_order_table = title_table[order(title_table$Freq, decreasing=TRUE),]
+# 參考 order.r 範例。
+head(title_order_table)
+
+# 文字雲  
+# 製作文字雲可以使用 wordcloud2 套件
+# 參考:http://blog.pulipuli.info/2016/11/r-draw-word-cloud-in-r.html
+
+library(wordcloud2)
+title_nchar = nchar(as.character(title_order_table$title_segment))
+# 計算詞的字數，之後要刪除字數為 1 的詞。
+
+title_order_table = title_order_table[title_nchar > 1,]
+# 刪除字數為 1 的詞。
+
+title_order_table = title_order_table[title_order_table$Freq >= 3,]
+# 只保留出現頻率 >= 3 的詞。
+
+cloud1 = wordcloud2::wordcloud2(title_order_table)
+cloud1
+
+cloud2 = wordcloud2::wordcloud2(title_order_table, shape="heart")
+# 改變文字雲為 cicle 形狀。
+cloud2
+
+library(htmlwidgets)
+html_file = paste0("c:/temp/", name, "1.html")
+htmlwidgets::saveWidget(cloud1, html_file, selfcontained=F)
+
+html_file = paste0("c:/temp/", name, "2.html")
+htmlwidgets::saveWidget(cloud2, html_file, selfcontained=F)
+
+# selfcontained: Whether to save the HTML as a single self-contained file 
+#   (with external resources base64 encoded) 
+#   or a file with external resources placed in an adjacent directory.
+# 需要存成 .html 才可由瀏覽器看到 shape 的結果 (plot 視窗看不到)。
+# RMarkdown 亦看不到文字雲結果。
